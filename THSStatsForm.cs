@@ -25,8 +25,8 @@ namespace THSStats
 
         public string rosterMode = "";
 
-        private string[] playerStatCodes = { "Field Goals", "Free Throws", "3 Pointers", "Fouls" };
-        private string[] compTeamStatCodes = { "Team Field Goals", "Team Free Throws", "Team 3 Pointers", "Team Fouls" };
+        private string[] playerStatCodes = { "Field Goals", "Free Throws", "3 Pointers", "Fouls","Offensive Rebounds","Defensive Rebounds","Rebounds" };
+        private string[] compTeamStatCodes = { "Team Field Goals", "Team Free Throws", "Team 3 Pointers", "Team Fouls", "Team Offensive Rebounds", "Team Defensive Rebounds", "Team Rebounds" };
 
         private ITHSStat currentStat = null;
         private List<ITHSStat> gameStats = new List<ITHSStat>();
@@ -45,10 +45,12 @@ namespace THSStats
             StatsListbox.Items.Add("Free Throws");
             StatsListbox.Items.Add("3 Pointers");
             StatsListbox.Items.Add("Fouls");
+            StatsListbox.Items.Add("Rebounds");
             StatsListbox.Items.Add("Team Field Goals");
             StatsListbox.Items.Add("Team Free Throws");
             StatsListbox.Items.Add("Team 3 Pointers");
             StatsListbox.Items.Add("Team Fouls");
+            StatsListbox.Items.Add("Team Rebounds");
 
             this.rosterMode = "Home";
             this.RosterButton.Text = this.rosterMode;
@@ -75,6 +77,9 @@ namespace THSStats
                     string gameJSON = wc.DownloadString(sURL);
 
                     this.game= JsonSerializer.Deserialize<Game>(gameJSON);
+
+                this.game.AllPlayers.ForEach(p => p.SetStatItemData(this.game.AllStatItems));
+
                 }
             
         }
@@ -170,6 +175,7 @@ namespace THSStats
             switch (this.selectedStatMode)
             {
                 case "Player":
+                    var player = this.game.AllPlayers.Single(p => p.PlayerId == this.selectedId);
                     currentStat = new IndividualStat(this.selectedStatCode, this.selectedId);
                     UpdateStat();
                     break;
@@ -259,10 +265,15 @@ namespace THSStats
     {
         public List<Player> _allPlayers = null;
         public List<School> _allSchools = null;
+        public List<StatItem> _allStatItems = null;
+
         public School HomeSchool { get; set; }
         public School VisitorSchool { get; set; }
         public List<Player> HomeRoster { get; set; }
         public List<Player> VisitorRoster { get; set; }
+        public List<StatItem> PointStatItems { get; set; }
+        public List<StatItem> ReboundStatItems { get; set; }
+
         public List<Player> AllPlayers
         {
             get
@@ -283,6 +294,22 @@ namespace THSStats
 
             }
         }
+        public List<StatItem> AllStatItems
+        {
+            get
+            {
+                _allStatItems = new List<StatItem>();
+
+                if (this.PointStatItems != null)
+                    _allStatItems = _allStatItems.Concat(this.PointStatItems).ToList();
+
+                if (this.ReboundStatItems != null)
+                    _allStatItems = _allStatItems.Concat(this.ReboundStatItems).ToList();
+
+                return _allStatItems;
+            }
+        }
+
 
     }
     public class School
@@ -325,6 +352,33 @@ namespace THSStats
                 return this.FirstName + " " + this.LastName;
             }
         }
+
+        public void SetStatItemData(List<StatItem> items)
+        {
+            this.Fouls = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "FOUL").Count();
+            this.FreeThrowsMade = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "FT").Count();
+            this.FreeThrowsMissed = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "FTM").Count();
+            this.TwoPointsMade = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "2P").Count();
+            this.TwoPointsMissed = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "2PM").Count();
+            this.ThreePointsMade = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "3P").Count();
+            this.ThreePointsMissed = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "3PM").Count();
+            this.OffRebounds= items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "OREB").Count();
+            this.DefRebounds = items.Where(i => i.PlayerId == this.PlayerId && i.StatCode == "DREB").Count();
+
+            this.Points = this.FreeThrowsMade + 2 * this.TwoPointsMade + 3 * this.ThreePointsMade;
+            this.Rebounds = this.OffRebounds + this.DefRebounds;
+
+        }
+
+    }
+
+    public class StatItem
+    {
+        public string SchoolId { get; set; }
+        public string PlayerId { get; set; }
+        public string PlayerName { get; set; }
+        public string StatCode { get; set; }
+        public string Period { get; set; }
 
     }
 
@@ -371,6 +425,7 @@ namespace THSStats
         {
 
             this.StatPlayer = game.AllPlayers.Single(p => p.PlayerId ==Id);
+
             this.StatSchool = game.AllSchools.Single(s => s.SchoolId == this.StatPlayer.SchoolId);
 
             this.FirstName = this.StatPlayer.FirstName;
@@ -396,6 +451,8 @@ namespace THSStats
                         return "Pts";
                     case "Fouls":
                         return "Fouls";
+                    case "Rebounds":
+                        return "Def";
                     default:
                         return "";
                 }
@@ -414,6 +471,8 @@ namespace THSStats
                         return this.StatPlayer.Points.ToString();
                     case "Fouls":
                         return this.StatPlayer.Fouls.ToString();
+                    case "Rebounds":
+                        return this.StatPlayer.DefRebounds.ToString();
                     default:
                         return "";
                 }
@@ -432,6 +491,8 @@ namespace THSStats
                         return "FT";
                     case "3 Pointers":
                         return "3 Pt";
+                    case "Rebounds":
+                        return "Off";
                     default:
                         return "";
                 }
@@ -459,6 +520,8 @@ namespace THSStats
                         made = this.StatPlayer.ThreePointsMade;
                         total = made + StatPlayer.ThreePointsMissed;
                         return made.ToString() + "/" + total.ToString();
+                    case "Rebounds":
+                        return this.StatPlayer.OffRebounds.ToString();
                     default:
                         return "";
                 }
@@ -476,6 +539,8 @@ namespace THSStats
                     case "Free Throws":
                     case "3 Pointers":
                         return "Pct";
+                    case "Rebounds":
+                        return "Total";
                     default:
                         return "";
                 }
@@ -516,6 +581,8 @@ namespace THSStats
                         else
                             pct = String.Format("{0:P0}", (Decimal)made / total);
                         return pct;
+                    case "Rebounds":
+                        return this.StatPlayer.Rebounds.ToString();
                     default:
                         return "";
                 }
@@ -587,6 +654,8 @@ namespace THSStats
                         return "3 Pointers";
                     case "Team Fouls":
                         return "Team Fouls";
+                    case "Team Rebounds":
+                        return "Rebounds";
                     default:
                         return "";
                 }
@@ -613,6 +682,8 @@ namespace THSStats
                         made = this.StatGame.HomeRoster.Sum(p => p.ThreePointsMade);
                         total = made + this.StatGame.HomeRoster.Sum(p => p.ThreePointsMissed);
                         return made.ToString() + "/" + total.ToString();
+                    case "Team Rebounds":
+                        return this.StatGame.HomeRoster.Sum(p => p.DefRebounds).ToString();
                     default:
                         return "";
                 }
@@ -653,7 +724,8 @@ namespace THSStats
                         else
                             pct = String.Format("{0:P0}", (Decimal)made / total);
                         return pct;
-
+                    case "Team Rebounds":
+                        return this.StatGame.HomeRoster.Sum(p => p.OffRebounds).ToString();
                     default:
                         return "";
                 }
@@ -681,6 +753,8 @@ namespace THSStats
                         made = this.StatGame.VisitorRoster.Sum(p => p.ThreePointsMade);
                         total = made + this.StatGame.VisitorRoster.Sum(p => p.ThreePointsMissed);
                         return made.ToString() + "/" + total.ToString();
+                    case "Team Rebounds":
+                        return this.StatGame.VisitorRoster.Sum(p => p.DefRebounds).ToString();
                     default:
                         return "";
                 }
@@ -722,7 +796,8 @@ namespace THSStats
                         else
                             pct = String.Format("{0:P0}", (Decimal)made / total);
                         return pct;
-
+                    case "Team Rebounds":
+                        return this.StatGame.VisitorRoster.Sum(p => p.OffRebounds).ToString();
                     default:
                         return "";
                 }
@@ -744,6 +819,8 @@ namespace THSStats
                             return made + " Foul";
                         else
                             return made.ToString() + " Fouls";
+                    case "Team Rebounds":
+                        return this.StatGame.HomeRoster.Sum(p => p.Rebounds).ToString();
                     default:
                         return "";
                 }
@@ -765,6 +842,8 @@ namespace THSStats
                             return made + " Foul";
                         else
                             return made.ToString() + " Fouls";
+                    case "Team Rebounds":
+                        return this.StatGame.VisitorRoster.Sum(p => p.Rebounds).ToString();
                     default:
                         return "";
                 }
