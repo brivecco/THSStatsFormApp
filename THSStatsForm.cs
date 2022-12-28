@@ -27,9 +27,13 @@ namespace THSStats
 
         private string[] playerStatCodes = { "Field Goals", "Free Throws", "3 Pointers", "Fouls","Offensive Rebounds","Defensive Rebounds","Rebounds" };
         private string[] compTeamStatCodes = { "Team Field Goals", "Team Free Throws", "Team 3 Pointers", "Team Fouls", "Team Offensive Rebounds", "Team Defensive Rebounds", "Team Rebounds" };
+        private string[] leaderStatCodes = { "Scoring Leaders", "Foul Trouble","Rebound Leaders"};
+
 
         private ITHSStat currentStat = null;
         private List<ITHSStat> gameStats = new List<ITHSStat>();
+
+        readonly string  ucFileName = "c:\\test\\ucsettings.data";
 
         public THSStatsForm()
         {
@@ -51,24 +55,34 @@ namespace THSStats
             StatsListbox.Items.Add("Team 3 Pointers");
             StatsListbox.Items.Add("Team Fouls");
             StatsListbox.Items.Add("Team Rebounds");
+            StatsListbox.Items.Add("Scoring Leaders");
+            StatsListbox.Items.Add("Foul Trouble");
+            StatsListbox.Items.Add("Rebound Leaders");
 
             this.rosterMode = "Home";
             this.RosterButton.Text = this.rosterMode;
             this.RosterButton.Visible = this.selectedStatMode == "Player";
 
+            this.Unique1Push.Click += UpdateUniqueCrawl;
+            this.Unique2Push.Click += UpdateUniqueCrawl;
+            this.Unique3Push.Click += UpdateUniqueCrawl;
+            this.Unique4Push.Click += UpdateUniqueCrawl;
+            this.Unique5Push.Click += UpdateUniqueCrawl;
+            this.Unique6Push.Click += UpdateUniqueCrawl;
             this.Crawl1Push.Click += UpdateUniqueCrawl;
             this.Crawl2Push.Click += UpdateUniqueCrawl;
             this.Crawl3Push.Click += UpdateUniqueCrawl;
-            this.UniqueStatPush.Click += UpdateUniqueCrawl;
+            this.Crawl4Push.Click += UpdateUniqueCrawl;
+            this.Crawl5Push.Click += UpdateUniqueCrawl;
+            this.Crawl6Push.Click += UpdateUniqueCrawl;
 
+            loadUniqueCrawlValues();
             LoadGame();
 
         }
 
         private void LoadGame()
         {
-            
-
                 string sURL;
                 sURL = "https://us-central1-thshooptest.cloudfunctions.net/getGame?foo=jocular";
 
@@ -83,9 +97,8 @@ namespace THSStats
                 }
             
         }
-        private void fillOtherListbox(string statMode, string rosterMode="")
+        private void FillOtherListbox(string statMode, string rosterMode="")
         {
-
             switch (statMode)
             {
             
@@ -109,6 +122,13 @@ namespace THSStats
                     list.Add(compTeamItem);
                     OtherListbox.DataSource = list;
                     break;
+                case "Leaders":
+                    var leaderList = new List<Object>();
+                    leaderList.Add(new { Description = "Both Teams", Id = "1" });
+                    //leaderList.Add(new { Description = "Home Team", Id = "1" });
+                    //leaderList.Add(new { Description = "Visiting Team", Id = "2" });
+                    OtherListbox.DataSource = leaderList;
+                    break;
             }
         }
 
@@ -123,7 +143,7 @@ namespace THSStats
                 this.selectedStatMode = "Player";
                 label2.Text = "Roster";
                 if (currentStatMode != this.selectedStatMode)
-                    this.fillOtherListbox(this.selectedStatMode, this.rosterMode);
+                    this.FillOtherListbox(this.selectedStatMode, this.rosterMode);
                 else
                     createStat(game, selectedStatMode, selectedStatCode, selectedId);
             }
@@ -133,14 +153,25 @@ namespace THSStats
                 this.selectedStatMode = "CompTeam";
                 label2.Text = "";
                 if (currentStatMode != this.selectedStatMode)
-                    this.fillOtherListbox(this.selectedStatMode);
+                    this.FillOtherListbox(this.selectedStatMode);
                 else
                     createStat(game, selectedStatMode, selectedStatCode, selectedId);
             }
+            else if (this.leaderStatCodes.Contains(box.Text))
+            {
+                this.selectedStatMode = "Leaders";
+                label2.Text = "";
+                if (currentStatMode != this.selectedStatMode)
+                    this.FillOtherListbox(this.selectedStatMode);
+                else
+                    createStat(game, selectedStatMode, selectedStatCode, selectedId);
+            }
+
             else
             {
+                this.selectedStatMode = "None";
                 OtherListbox.DataSource = null;
-                OtherListbox.Items.Clear();
+                OtherListbox.DisplayMember = "Description";
             }
 
             this.RosterButton.Visible = this.selectedStatMode == "Player";
@@ -150,7 +181,7 @@ namespace THSStats
         {
             this.rosterMode= (this.rosterMode=="Home" ? "Visitor": "Home");
             RosterButton.Text = this.rosterMode;
-            fillOtherListbox(selectedStatMode,rosterMode);
+            FillOtherListbox(selectedStatMode,rosterMode);
         }
 
         private void OtherListbox_SelectedIndexChanged(object sender, EventArgs e)
@@ -170,7 +201,11 @@ namespace THSStats
         private void createStat(Game game, string statMode, string statCode, string id)
         {
             if (game == null || String.IsNullOrEmpty(statMode) || string.IsNullOrEmpty(id))
+            {
+                UpdateStat();
                 return;
+            }
+                
 
             switch (this.selectedStatMode)
             {
@@ -181,10 +216,15 @@ namespace THSStats
                     break;
                 case "CompTeam":
                     currentStat = new CompTeamStat(this.selectedStatCode, this.selectedId);
-                    CompTeamStat compStat = (CompTeamStat)currentStat;
+                    UpdateStat();
+                    break;
+                case "Leaders":
+                    currentStat = new LeadersTeamStat(this.selectedStatCode, this.selectedId);
                     UpdateStat();
                     break;
                 default:
+                    currentStat = null;
+                    UpdateStat();
                     break;
 
                     //this.gameStats.Add(new IndividualStat(this.selectedStatMode, this.selectedId));
@@ -193,7 +233,12 @@ namespace THSStats
         private void UpdateStat()
         {
             if (currentStat == null)
+            {
+                StatInfoLabel.Text = "";
+                StatInfoLabel2.Text = "";
                 return;
+            }
+                
 
             LoadGame();
             currentStat.UpdateStat(game);
@@ -228,28 +273,15 @@ namespace THSStats
             //MessageBox.Show("push " + ((Button)sender).Name);
             string infoText;
             string filePrefix;
+            string buttonName = ((Button)sender).Name;
+            string textControlName = buttonName.Replace("Push", "Box");
 
-            switch (((Button)sender).Name) 
-            {
-                case "Crawl1Push":
-                    infoText = Crawl1Box.Text.Trim();
-                    filePrefix = "Crawl";
-                    break;
-                case "Crawl2Push":
-                    infoText = Crawl2Box.Text.Trim();
-                    filePrefix = "Crawl";
-                    break;
-                case "Crawl3Push":
-                    infoText = Crawl3Box.Text.Trim();
-                    filePrefix = "Crawl";
-                    break;
-                case "UniqueStatPush":
-                    infoText = UniqueStatBox.Text.Trim();
-                    filePrefix = "UniqueStat";
-                    break;
-                default:
-                    return;
-            }
+            if (buttonName.ToLower().Contains("crawl"))
+                filePrefix = "Crawl";
+            else
+                filePrefix = "UniqueStat";
+
+            infoText = ((TextBox)(this.Controls.Find(textControlName,true)[0])).Text.Trim();
 
             OtherInfo info = new OtherInfo(infoText);
 
@@ -257,8 +289,55 @@ namespace THSStats
             json = "[" + json + "]";
 
             System.IO.File.WriteAllText($"c:\\test\\"+filePrefix+".json", json);
-
             MessageBox.Show("Update complete");
+        }
+        private void saveUniqueCrawlValues()
+        {
+            string uniqueValues = "";
+            string crawlValues = "";
+
+            for (int i = 1; i <= 6; i++)
+            {
+                string unique = ((TextBox)(this.Controls.Find("Unique"+i.ToString()+"Box", true)[0])).Text.Trim();
+                string crawl = ((TextBox)(this.Controls.Find("Crawl" + i.ToString() + "Box", true)[0])).Text.Trim();
+                unique = unique == "" ? "Empty" : unique;
+                crawl = crawl == "" ? "Empty" : crawl;
+                uniqueValues = uniqueValues + (i < 6 ? unique + "|" : unique);
+                crawlValues = crawlValues + (i < 6 ? crawl + "|" : crawl);
+            }
+            File.WriteAllText(ucFileName, uniqueValues + "\r" + crawlValues);
+        }
+
+        private void loadUniqueCrawlValues()
+        {
+            
+            if (File.Exists(ucFileName))
+            {
+                string fileInfo = System.IO.File.ReadAllText(ucFileName);
+                string[] rows = fileInfo.Split('\r');
+                string[] uniques = rows[0].Split('|');
+                string[] crawls = rows[1].Split('|');
+
+                Unique1Box.Text = uniques[0] == "Empty" ? "" : uniques[0];
+                Unique2Box.Text = uniques[1] == "Empty" ? "" : uniques[1];
+                Unique3Box.Text = uniques[2] == "Empty" ? "" : uniques[2];
+                Unique4Box.Text = uniques[3] == "Empty" ? "" : uniques[3];
+                Unique5Box.Text = uniques[4] == "Empty" ? "" : uniques[4];
+                Unique6Box.Text = uniques[5] == "Empty" ? "" : uniques[5];
+
+                Crawl1Box.Text = crawls[0] == "Empty" ? "" : crawls[0];
+                Crawl2Box.Text = crawls[1] == "Empty" ? "" : crawls[1];
+                Crawl3Box.Text = crawls[2] == "Empty" ? "" : crawls[2];
+                Crawl4Box.Text = crawls[3] == "Empty" ? "" : crawls[3];
+                Crawl5Box.Text = crawls[4] == "Empty" ? "" : crawls[4];
+                Crawl6Box.Text = crawls[5] == "Empty" ? "" : crawls[5];
+
+            }
+        }
+
+        private void THSStatsForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            saveUniqueCrawlValues();
         }
     }
     public class Game
@@ -639,6 +718,8 @@ namespace THSStats
 
             this.StatGame = game;
 
+
+
         }
         public string StatLabel
         {
@@ -655,7 +736,7 @@ namespace THSStats
                     case "Team Fouls":
                         return "Team Fouls";
                     case "Team Rebounds":
-                        return "Rebounds";
+                        return "Rebounds DEF/OFF/TOT";
                     default:
                         return "";
                 }
@@ -725,7 +806,7 @@ namespace THSStats
                             pct = String.Format("{0:P0}", (Decimal)made / total);
                         return pct;
                     case "Team Rebounds":
-                        return this.StatGame.HomeRoster.Sum(p => p.OffRebounds).ToString();
+                        return this.StatGame.HomeRoster.Sum(p => p.Rebounds).ToString();
                     default:
                         return "";
                 }
@@ -797,7 +878,7 @@ namespace THSStats
                             pct = String.Format("{0:P0}", (Decimal)made / total);
                         return pct;
                     case "Team Rebounds":
-                        return this.StatGame.VisitorRoster.Sum(p => p.OffRebounds).ToString();
+                        return this.StatGame.VisitorRoster.Sum(p => p.Rebounds).ToString();
                     default:
                         return "";
                 }
@@ -820,7 +901,7 @@ namespace THSStats
                         else
                             return made.ToString() + " Fouls";
                     case "Team Rebounds":
-                        return this.StatGame.HomeRoster.Sum(p => p.Rebounds).ToString();
+                        return this.StatGame.HomeRoster.Sum(p => p.OffRebounds).ToString();
                     default:
                         return "";
                 }
@@ -843,7 +924,7 @@ namespace THSStats
                         else
                             return made.ToString() + " Fouls";
                     case "Team Rebounds":
-                        return this.StatGame.VisitorRoster.Sum(p => p.Rebounds).ToString();
+                        return this.StatGame.VisitorRoster.Sum(p => p.OffRebounds).ToString();
                     default:
                         return "";
                 }
@@ -853,6 +934,113 @@ namespace THSStats
         }
     }
 
+    public class LeadersTeamStat : ITHSStat
+    {
+        public string StatCode { get; set; }
+        public string Id { get; set; }
+
+        private Game StatGame { get; set; }
+        
+        public string StatHeader
+        {
+            get
+            {
+                return this.StatCode;
+            }
+        }
+        public string Jersey1 { get; set; }
+        public string FirstName1 { get; set; }
+        public string LastName1 { get; set; }
+        public string Stat1 { get; set; }
+        public string Logo1 { get; set; }
+
+        public string Jersey2 { get; set; }
+        public string FirstName2 { get; set; }
+        public string LastName2 { get; set; }
+        public string Stat2 { get; set; }
+        public string Logo2 { get; set; }
+
+        public string Jersey3 { get; set; }
+        public string FirstName3 { get; set; }
+        public string LastName3 { get; set; }
+        public string Stat3 { get; set; }
+        public string Logo3 { get; set; }
+
+        public LeadersTeamStat(string statCode, string statId)
+        {
+            this.StatCode = statCode;
+            this.Id = statId;
+
+        }
+        public void UpdateStat(Game game)
+        {
+
+            List<Player> leaders;
+
+            switch (this.StatCode)
+            {
+                case "Scoring Leaders":
+                    leaders = game.AllPlayers.OrderByDescending(p => p.Points).ToList();
+                    break;
+                case "Foul Trouble":
+                    leaders = game.AllPlayers.OrderByDescending(p => p.Fouls).ToList();
+                    break;
+                case "Rebound Leaders":
+                    leaders = game.AllPlayers.OrderByDescending(p => p.Rebounds).ToList();
+                    break;
+                default:
+                    leaders = game.AllPlayers.OrderByDescending(p => p.Points).ToList();
+                    break;
+            }
+
+
+            this.FirstName1 = leaders[0].FirstName;
+            this.LastName1 = leaders[0].LastName;
+            this.Jersey1 = leaders[0].Jersey;
+            this.Stat1 = getStatValue(leaders[0]);
+            this.Logo1 = leaders[0].SchoolId == game.HomeSchool.SchoolId ? game.HomeSchool.LogoFileName : game.VisitorSchool.LogoFileName;
+
+            this.FirstName2 = leaders[1].FirstName;
+            this.LastName2 = leaders[1].LastName;
+            this.Jersey2 = leaders[1].Jersey;
+            this.Stat2 = getStatValue(leaders[1]);
+            this.Logo2 = leaders[1].SchoolId == game.HomeSchool.SchoolId ? game.HomeSchool.LogoFileName : game.VisitorSchool.LogoFileName;
+
+            this.FirstName3 = leaders[2].FirstName;
+            this.LastName3 = leaders[2].LastName;
+            this.Jersey3 = leaders[2].Jersey;
+            this.Stat3 = getStatValue(leaders[2]);
+            this.Logo3 = leaders[2].SchoolId == game.HomeSchool.SchoolId ? game.HomeSchool.LogoFileName : game.VisitorSchool.LogoFileName;
+
+        }
+
+        private string getStatValue(Player player)
+        {
+            switch (this.StatCode)
+            {
+                case "Scoring Leaders":
+                    return player.Points.ToString();
+                case "Foul Trouble":
+                    return player.Fouls.ToString();
+                case "Rebound Leaders":
+                    return player.Rebounds.ToString();
+                default:
+                    return 0.ToString();
+            }
+        }
+        public string Description
+        {
+            get
+            {
+                //string ret = $"{this.HomeSchoolName} {this.StatLabel} {this.HomeStat1}, {this.HomeStat2}, {this.HomeStat3}";
+                //ret += "|";
+                //ret += $"{this.VisitorSchoolName} {this.StatLabel} {this.VisitorStat1}, {this.VisitorStat2}, {this.VisitorStat3} ";
+                //return ret;
+                string ret = $"{this.LastName1} ({this.Stat1}), {this.LastName2} ({this.Stat2}),{this.LastName3} ({this.Stat3})";
+                return ret;
+            }
+        }
+    }
 
     // Unique Stat and crawls
     public class OtherInfo
